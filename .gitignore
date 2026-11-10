@@ -1,3 +1,9 @@
 node_modules
 dist
 .DS_Store
+# 게임에서 추출한 지형 모델 등 개인 자료 (커밋 금지)
+local/
+*.glb
+*.gltf
+*.obj
+*.fbx
