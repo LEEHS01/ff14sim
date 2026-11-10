@@ -12,7 +12,7 @@ import {
 import { PRESETS } from './presets.js';
 
 // ---------------------------------------------------------------- 상태
-const LS = { scn: 'onsal.scn.v1', map: 'onsal.map.v1', ov: 'onsal.overlay.v1', view: 'onsal.view.v1' };
+const LS = { scn: 'onsal.scn.v2', map: 'onsal.map.v1', ov: 'onsal.overlay.v1', view: 'onsal.view.v1' };
 const clone = (o) => JSON.parse(JSON.stringify(o));
 const uid = (p = 'id') => p + Math.random().toString(36).slice(2, 8);
 const $ = (s) => document.querySelector(s);
@@ -273,20 +273,25 @@ function makeUnitObj(u) {
   const ring = new THREE.Mesh(flatRing(r - 0.7, r, 48), new THREE.MeshBasicMaterial({ color }));
   disk.renderOrder = 3; ring.renderOrder = 3;
   const pin = new THREE.Group();
-  const hgt = u.kind === 'main' ? 9 : 5;
-  const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, hgt, 6), new THREE.MeshStandardMaterial({ color: '#333' }));
-  stick.position.y = hgt / 2;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(u.kind === 'main' ? 1.8 : 1.1, 16, 12), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.25 }));
-  head.position.y = hgt;
-  stick.castShadow = head.castShadow = true;
-  pin.add(stick, head);
+  const k = u.kind === 'main' ? 1.4 : 0.9;
+  const hgt = 8.5 * k;
+  const bodyMat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.2, roughness: 0.5 });
+  const baseMat = new THREE.MeshStandardMaterial({ color: '#f1ece2', roughness: 0.6 });
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(2.6 * k, 2.9 * k, 1.1 * k, 24), baseMat);
+  base.position.y = 0.55 * k;
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.9 * k, 2.1 * k, 5.2 * k, 20), bodyMat);
+  body.position.y = 3.6 * k;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(1.75 * k, 20, 14), bodyMat);
+  head.position.y = hgt - 0.6 * k;
+  base.castShadow = body.castShadow = head.castShadow = true;
+  pin.add(head, base, body);
   const l = label(u.label || '', 'unit');
   l.element.style.borderBottom = `3px solid ${color}`;
   l.position.y = hgt + 3;
   pin.add(l);
   group.add(disk, ring, pin);
   unitGroup.add(group);
-  const o = { group, disk, ring, pin, l, data: u, cur: { x: u.x, y: u.y }, anim: null };
+  const o = { group, disk, ring, pin, l, data: u, cur: { x: u.x, y: u.y }, anim: null, lift: 0 };
   placeUnit(o, u.x, u.y);
   return o;
 }
@@ -296,14 +301,14 @@ function placeUnit(o, px, py) {
   o.group.position.set(wx, 0, wz);
   conformGeo(o.disk.geometry, wx, wz, 0.45);
   conformGeo(o.ring.geometry, wx, wz, 0.5);
-  o.pin.position.y = hAt(wx, wz);
+  o.pin.position.y = hAt(wx, wz) + (o.lift || 0);
 }
 function refreshUnitLook(o) {
   const color = sideColor(o.data.side);
   o.disk.material.color.set(color);
   o.ring.material.color.set(color);
-  o.pin.children[1].material.color.set(color);
-  o.pin.children[1].material.emissive.set(color);
+  o.pin.children[0].material.color.set(color);
+  o.pin.children[0].material.emissive.set(color);
   o.l.element.textContent = o.data.label || '';
   o.l.element.style.borderBottom = `3px solid ${color}`;
 }
@@ -322,7 +327,7 @@ function smoothPath(pts) {
   return out;
 }
 
-function makePathObj(d, reveal) {
+function makePathObj(d, reveal, opt = {}) {
   const color = sideColor(d.side);
   const pts = smoothPath(d.pts);
   if (pts.length < 2) return null;
@@ -330,7 +335,7 @@ function makePathObj(d, reveal) {
   const group = new THREE.Group();
   const dashed = d.type === 'retreat';
   const geo = new LineGeometry(); geo.setPositions(flat);
-  const main = new Line2(geo, lineMat({ color, linewidth: 5, dashed, dashSize: 2.6, gapSize: 1.8, worldUnits: false }));
+  const main = new Line2(geo, lineMat({ color, linewidth: opt.width || 5, dashed, dashSize: 2.6, gapSize: 1.8, worldUnits: false }));
   main.computeLineDistances();
   main.renderOrder = 5;
   const geo2 = new LineGeometry(); geo2.setPositions(flat);
@@ -347,11 +352,11 @@ function makePathObj(d, reveal) {
   cone.position.copy(a).addScaledVector(dir, 1.2);
   cone.renderOrder = 5;
   group.add(main, xray, cone);
-  drawGroup.add(group);
+  (opt.group || drawGroup).add(group);
   const o = { group, data: d, pts, main, xray, cone };
   if (reveal) {
     const n = pts.length - 1;
-    o.reveal = { t0: performance.now(), dur: Math.min(1400, 300 + n * 6), n };
+    o.reveal = { t0: performance.now(), dur: opt.dur || Math.min(1400, 300 + n * 6), n };
     geo.instanceCount = 0; geo2.instanceCount = 0; cone.visible = false;
   }
   return o;
@@ -400,8 +405,50 @@ function makeDrawObj(d, reveal) {
   return null;
 }
 
+// ---------------------------------------------------------------- 핀 동선(이동 기록)
+const trailGroup = new THREE.Group();
+scene.add(trailGroup);
+const trailObjs = new Map();
+const pathOf = (u) => (u.trail && u.trail.length ? [...u.trail, [u.x, u.y]] : null);
+function polyLen(pts) { let l = 0; for (let i = 1; i < pts.length; i++) l += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); return l; }
+const moveDur = (len) => Math.max(700, Math.min(4000, len * 9));
+function buildTrail(u, reveal, dur) {
+  const old = trailObjs.get(u.id);
+  if (old) { disposeGroup(old.group); trailGroup.remove(old.group); trailObjs.delete(u.id); }
+  const pts = pathOf(u);
+  if (!pts || polyLen(pts) < 4) return;
+  const o = makePathObj({ type: 'advance', side: u.side, pts }, reveal, { group: trailGroup, width: 4, dur });
+  if (o) trailObjs.set(u.id, o);
+}
+function animateAlong(o, pts, dur) {
+  const lens = [0];
+  for (let i = 1; i < pts.length; i++) lens.push(lens[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  o.anim = { pts, lens, total: lens[lens.length - 1] || 1, t0: performance.now(), dur };
+  placeUnit(o, pts[0][0], pts[0][1]);
+}
+// 현재 단계의 이동을 처음부터 재생. 가장 긴 이동 시간(ms)을 돌려준다.
+function playStepMoves(prevStep) {
+  let longest = 0;
+  for (const u of step().units) {
+    const o = unitObjs.get(u.id);
+    if (!o) continue;
+    let pts = pathOf(u);
+    if (!pts) {
+      const pu = prevStep?.units.find((p) => p.id === u.id);
+      if (pu && (pu.x !== u.x || pu.y !== u.y)) pts = [[pu.x, pu.y], [u.x, u.y]];
+    }
+    if (!pts) { placeUnit(o, u.x, u.y); continue; }
+    const dur = moveDur(polyLen(pts));
+    longest = Math.max(longest, dur);
+    animateAlong(o, pts, dur);
+    buildTrail(u, true, dur);
+  }
+  return longest;
+}
+
 // ---------------------------------------------------------------- 단계 렌더
 let lastRenderedStep = -1;
+let lastMoveDur = 0;
 function renderStep(animate) {
   const st = step();
   // 유닛: id 로 매칭해서 이동 애니메이션
@@ -417,12 +464,14 @@ function renderStep(animate) {
     }
     o.data = u;
     refreshUnitLook(o);
-    if (animate && (o.cur.x !== u.x || o.cur.y !== u.y)) o.anim = { from: { ...o.cur }, to: { x: u.x, y: u.y }, t0: performance.now(), dur: 900 };
-    else { o.anim = null; placeUnit(o, u.x, u.y); }
+    o.anim = null; placeUnit(o, u.x, u.y);
   }
   for (const [id, o] of unitObjs) {
     if (!seen.has(id)) { disposeGroup(o.group); unitGroup.remove(o.group); unitObjs.delete(id); }
   }
+  disposeGroup(trailGroup); trailObjs.clear();
+  if (animate) lastMoveDur = playStepMoves(animate === true ? null : animate);
+  else for (const u of st.units) buildTrail(u, false);
   // 그림: 새로 생긴 경로만 그려지는 애니메이션
   const prevIds = new Set(drawObjs.keys());
   disposeGroup(drawGroup);
@@ -459,9 +508,10 @@ function refreshStepsUI() {
 }
 function gotoStep(i, animate) {
   if (i < 0 || i >= scn.steps.length) return;
+  const prev = step();
   stepIdx = i;
   selected = null;
-  renderStep(animate);
+  renderStep(animate ? prev : false);
   refreshStepsUI();
   refreshSelPanel();
 }
@@ -471,10 +521,12 @@ $('#step-add').onclick = () => {
   const copy = clone(step());
   copy.title = '';
   copy.note = '';
+  for (const u of copy.units) delete u.trail;
+  copy.drawings = copy.drawings.filter((d) => d.type === 'mark' || d.type === 'text');
   scn.steps.splice(stepIdx + 1, 0, copy);
   gotoStep(stepIdx + 1, false);
   save();
-  toast('현재 배치를 복사한 새 단계를 만들었어요. 유닛을 옮기고 경로를 그려보세요.');
+  toast('새 단계예요. 핀을 끌어서 옮기면 동선이 남고, 재생하면 그 길로 움직여요.');
 };
 $('#step-del').onclick = () => {
   if (scn.steps.length <= 1) return toast('마지막 단계는 지울 수 없어요.');
@@ -491,12 +543,20 @@ $('#step-play').onclick = () => {
   if (playTimer) return stopPlay();
   $('#step-play').textContent = '■ 정지';
   if (stepIdx >= scn.steps.length - 1) gotoStep(0, false);
-  playTimer = setInterval(() => {
+  const next = () => {
     if (stepIdx >= scn.steps.length - 1) return stopPlay();
     gotoStep(stepIdx + 1, true);
-  }, 2800);
+    playTimer = setTimeout(next, lastMoveDur + 1600);
+  };
+  playTimer = setTimeout(next, 600);
 };
-function stopPlay() { clearInterval(playTimer); playTimer = null; $('#step-play').textContent = '▶ 재생'; }
+function stopPlay() { clearTimeout(playTimer); playTimer = null; $('#step-play').textContent = '▶ 재생'; }
+$('#step-replay').onclick = () => { lastMoveDur = playStepMoves(scn.steps[stepIdx - 1] || null); };
+$('#step-clear-trails').onclick = () => {
+  pushUndo();
+  for (const u of step().units) delete u.trail;
+  renderStep(false); save();
+};
 
 // ---------------------------------------------------------------- UI: 시나리오
 const presetSel = $('#preset');
@@ -690,6 +750,11 @@ function refreshSelPanel() {
       flyTo(pos, tgt);
     };
     row.appendChild(pov);
+    if (data.trail) {
+      const ct = document.createElement('button'); ct.textContent = '동선 지우기';
+      ct.onclick = () => { pushUndo(); delete data.trail; buildTrail(data, false); save(); refreshSelPanel(); };
+      row.appendChild(ct);
+    }
     body.appendChild(row);
   } else if (data.type === 'advance' || data.type === 'retreat') {
     addField('소속', sideSelect(data.side, (v) => { data.side = v; }));
@@ -804,7 +869,7 @@ function hitTest(e, g) {
   }
   // 유닛 핀 머리 (화면상)
   for (const [id, o] of unitObjs) {
-    const head = new THREE.Vector3(); o.pin.children[1].getWorldPosition(head);
+    const head = new THREE.Vector3(); o.pin.children[0].getWorldPosition(head);
     const [x, y, z] = screenOf(head);
     if (z < 1 && Math.hypot(x - sx, y - sy) < 12) return { kind: 'unit', id };
   }
@@ -874,7 +939,16 @@ vp.addEventListener('pointerdown', (e) => {
   }
 }, true);
 
+let hoverT = 0;
 vp.addEventListener('pointermove', (e) => {
+  if (!drag && tool === 'select' && !editMap && e.buttons === 0) {
+    const now = performance.now();
+    if (now - hoverT > 60) {
+      hoverT = now;
+      const hit = hitTest(e, groundPx(e));
+      canvas.style.cursor = hit?.kind === 'unit' ? 'grab' : hit?.kind === 'drawing' ? 'move' : hit?.kind === 'node' ? 'pointer' : 'default';
+    }
+  }
   if (!drag) return;
   const g = groundPx(e);
   if (!g) return;
@@ -891,12 +965,24 @@ vp.addEventListener('pointermove', (e) => {
     const dx = g.x - drag.start.x, dy = g.y - drag.start.y;
     if (!drag.moved && Math.hypot(dx, dy) < 0.8) return;
     if (!drag.undoPushed) { undoStack.push(JSON.stringify({ scn: { ...scn, steps: scn.steps.map((s, i) => (i === stepIdx ? { ...s, units: s.units.map((u) => (u.id === drag.orig.id ? drag.orig : u)), drawings: s.drawings.map((d) => (d.id === drag.orig.id ? drag.orig : d)) } : s)) }, map, stepIdx })); drag.undoPushed = true; }
-    drag.moved = true;
     const t = drag.target;
+    if (t.kind === 'unit' && !drag.moved) {
+      const u = findUnit(t.id), o = unitObjs.get(t.id);
+      o.lift = 2.5;
+      canvas.style.cursor = 'grabbing';
+      if ($('#rec-trail').checked && !u.trail?.length) u.trail = [[drag.orig.x, drag.orig.y]];
+    }
+    drag.moved = true;
     if (t.kind === 'unit') {
       const u = findUnit(t.id);
       u.x = Math.round((drag.orig.x + dx) * 10) / 10; u.y = Math.round((drag.orig.y + dy) * 10) / 10;
       const o = unitObjs.get(t.id); o.anim = null; placeUnit(o, u.x, u.y);
+      if ($('#rec-trail').checked && u.trail) {
+        const last = u.trail[u.trail.length - 1];
+        if (Math.hypot(u.x - last[0], u.y - last[1]) > 3) u.trail.push([u.x, u.y]);
+        const now = performance.now();
+        if (!drag.lastTrail || now - drag.lastTrail > 50) { drag.lastTrail = now; buildTrail(u, false); }
+      }
     } else {
       const d = findDrawing(t.id);
       if (d.pts) d.pts = drag.orig.pts.map(([x, y]) => [Math.round((x + dx) * 10) / 10, Math.round((y + dy) * 10) / 10]);
@@ -928,7 +1014,22 @@ vp.addEventListener('pointerup', (e) => {
       }
       return;
     }
-    if (d.kind === 'move') { if (d.moved) save(); return; }
+    if (d.kind === 'move') {
+      if (d.target.kind === 'unit') {
+        const u = findUnit(d.target.id), o = unitObjs.get(d.target.id);
+        if (o) { o.lift = 0; placeUnit(o, u.x, u.y); }
+        if (u?.trail) {
+          u.trail = simplify(u.trail, 1);
+          const lastT = u.trail[u.trail.length - 1];
+          if (lastT && Math.hypot(lastT[0] - u.x, lastT[1] - u.y) < 1) u.trail.pop();
+          if (!u.trail.length || polyLen([...u.trail, [u.x, u.y]]) < 4) delete u.trail;
+          buildTrail(u, false);
+        }
+        canvas.style.cursor = 'grab';
+      }
+      if (d.moved) save();
+      return;
+    }
     if (d.kind === 'handle') { if (d.moved) { save(); queueRebuild(); } else undoStack.pop(); return; }
   }
   if (!wasClick || btn !== 0) return;
@@ -971,6 +1072,8 @@ function onClick(e, g) {
     renderStep(false);
     selected = { kind: 'unit', id: u.id }; updateSelectionHighlight(); refreshSelPanel();
     save();
+    setTool('select');
+    toast('핀을 놓았어요. 잡고 끌어서 옮겨보세요.');
   } else if (tool === 'mark') {
     pushUndo();
     const used = step().drawings.filter((d) => d.type === 'mark').map((d) => d.text);
@@ -1245,11 +1348,15 @@ function tick() {
   }
   for (const [, o] of unitObjs) {
     if (!o.anim) continue;
-    const k = Math.min(1, (now - o.anim.t0) / o.anim.dur), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-    placeUnit(o, o.anim.from.x + (o.anim.to.x - o.anim.from.x) * e, o.anim.from.y + (o.anim.to.y - o.anim.from.y) * e);
-    if (k >= 1) o.anim = null;
+    const a = o.anim;
+    const k = Math.min(1, (now - a.t0) / a.dur), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+    const dist = a.total * e;
+    let i = 1; while (i < a.lens.length - 1 && a.lens[i] < dist) i++;
+    const seg = (a.lens[i] - a.lens[i - 1]) || 1, t = Math.min(1, Math.max(0, (dist - a.lens[i - 1]) / seg));
+    placeUnit(o, a.pts[i - 1][0] + (a.pts[i][0] - a.pts[i - 1][0]) * t, a.pts[i - 1][1] + (a.pts[i][1] - a.pts[i - 1][1]) * t);
+    if (k >= 1) { o.anim = null; placeUnit(o, o.data.x, o.data.y); }
   }
-  for (const [, o] of drawObjs) {
+  for (const o of [...drawObjs.values(), ...trailObjs.values()]) {
     if (!o.reveal) continue;
     const k = Math.min(1, (now - o.reveal.t0) / o.reveal.dur);
     const n = Math.max(1, Math.floor(o.reveal.n * k));
@@ -1291,4 +1398,4 @@ async function init() {
 init();
 
 // 디버그/테스트용
-window.__onsal = { get map() { return map; }, get scn() { return scn; }, gotoStep, camPreset, setTool, camera, controls };
+window.__onsal = { get map() { return map; }, get scn() { return scn; }, gotoStep, camPreset, setTool, camera, controls, unitPos: (id) => unitObjs.get(id)?.cur };

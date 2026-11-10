@@ -13,14 +13,16 @@
     <header id="toolbar">
       <div class="brand">온살 하카이르 <span>3D 전술 보드</span></div>
       <div class="group" id="tools">
-        <button data-tool="select" class="on" title="선택·이동 (V)">✋ 선택</button>
-        <button data-tool="main" title="본대 놓기 (1)">⬤ 본대</button>
-        <button data-tool="small" title="소수 놓기 (2)">● 소수</button>
-        <button data-tool="advance" title="진격 경로 — 드래그로 그리기 (3)">➜ 진격</button>
-        <button data-tool="retreat" title="퇴로 — 드래그로 그리기 (4)">⇢ 퇴로</button>
-        <button data-tool="mark" title="방어 위치 박스 (5)">▢ 방어</button>
-        <button data-tool="text" title="메모 (6)">✎ 메모</button>
-        <button data-tool="erase" title="지우기 (E)">⌫ 지우기</button>
+        <button data-tool="select" class="on" title="핀을 잡고 끌어서 이동 (V)">✋ 핀 이동</button>
+        <button data-tool="main" title="본대 핀 추가 (1)">＋ 본대 핀</button>
+        <button data-tool="small" title="소수 핀 추가 (2)">＋ 소수 핀</button>
+        <label class="tog" title="핀을 끌면 지나간 길이 화살표로 남아요"><input type="checkbox" id="rec-trail" checked /> 동선 남기기</label>
+        <span class="sep"></span>
+        <button data-tool="advance" class="sub" title="화살표 직접 그리기 (3)">✏ 화살표</button>
+        <button data-tool="retreat" class="sub" title="점선 직접 그리기 (4)">┅ 점선</button>
+        <button data-tool="mark" class="sub" title="방어 위치 박스 (5)">▢ 방어</button>
+        <button data-tool="text" class="sub" title="메모 (6)">✎ 메모</button>
+        <button data-tool="erase" class="sub" title="지우기 (E)">⌫ 지우기</button>
       </div>
       <div class="group" id="sides">
         <span class="lbl">색</span>
@@ -43,6 +45,11 @@
         <button id="step-del">삭제</button>
         <button id="step-play">▶ 재생</button>
       </div>
+      <div class="row wrap">
+        <button id="step-replay" title="이 단계의 핀 이동을 다시 보기">↺ 이 단계 이동 보기</button>
+        <button id="step-clear-trails" title="이 단계의 동선 화살표를 모두 지우기">동선 지우기</button>
+      </div>
+      <p class="hint">핀을 끌어 옮기면 지나간 길이 화살표로 남아요. "다음 단계"를 누르고 다시 옮기면, 재생할 때 핀이 그 길을 따라 움직여요.</p>
       <label class="field">제목<input id="step-title" /></label>
       <label class="field">설명<textarea id="step-note" rows="5"></textarea></label>
       <h3>시나리오</h3>
@@ -113,7 +120,8 @@
       <section class="help">
         <h3>조작법</h3>
         <ul>
-          <li>회전: 왼쪽 드래그 (그리기 도구 중엔 오른쪽 드래그)</li>
+          <li>핀 잡고 끌기: 이동 (동선이 화살표로 남음)</li>
+          <li>빈 곳 왼쪽 드래그: 회전 (화살표 도구 중엔 오른쪽 드래그)</li>
           <li>이동: 오른쪽 드래그 / Shift+드래그</li>
           <li>확대: 휠 · 두 손가락</li>
           <li>노드 클릭: 등급 B → A → S → 없음</li>
