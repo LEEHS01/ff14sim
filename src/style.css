@@ -11,7 +11,8 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   font: 13px/1.45 system-ui, -apple-system, "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; overflow: hidden; }
-#app { position: fixed; inset: 0; }
+#app { position: fixed; inset: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
+:root { color-scheme: dark; }
 #viewport { position: absolute; inset: 0; }
 #viewport canvas { display: block; touch-action: none; }
 

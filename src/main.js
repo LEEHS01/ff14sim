@@ -978,11 +978,13 @@ function onClick(e, g) {
     step().drawings.push({ id: uid('d'), type: 'mark', text: letter, x: g.x, y: g.y });
     renderStep(false); save();
   } else if (tool === 'text') {
-    const text = prompt('메모 내용', '');
-    if (!text) return;
     pushUndo();
-    step().drawings.push({ id: uid('d'), type: 'text', text, side, x: g.x, y: g.y });
+    const d = { id: uid('d'), type: 'text', text: '메모', side, x: g.x, y: g.y };
+    step().drawings.push(d);
     renderStep(false); save();
+    selected = { kind: 'drawing', id: d.id }; refreshSelPanel();
+    document.body.classList.add('panels-open');
+    const ta = $('#sel-body textarea'); if (ta) { ta.focus(); ta.select(); }
   }
 }
 
@@ -1183,8 +1185,8 @@ $('#map-import').onchange = async (e) => {
   e.target.value = '';
 };
 $('#map-reset').onclick = () => {
-  if (!confirm('지형을 기본값으로 되돌릴까요? (되돌리기 가능)')) return;
   pushUndo(); map = clone(DEFAULT_MAP); rebuildTerrain(); applyOverlayParams(); save();
+  toast('지형을 기본값으로 되돌렸어요. Ctrl+Z 로 취소할 수 있어요.');
 };
 
 // ---------------------------------------------------------------- 참고 지도 오버레이
