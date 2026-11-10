@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>온살 하카이르 전술 보드</title>
+  <link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <div id="viewport"></div>
+
+    <header id="toolbar">
+      <div class="brand">온살 하카이르 <span>3D 전술 보드</span></div>
+      <div class="group" id="tools">
+        <button data-tool="select" class="on" title="선택·이동 (V)">✋ 선택</button>
+        <button data-tool="main" title="본대 놓기 (1)">⬤ 본대</button>
+        <button data-tool="small" title="소수 놓기 (2)">● 소수</button>
+        <button data-tool="advance" title="진격 경로 — 드래그로 그리기 (3)">➜ 진격</button>
+        <button data-tool="retreat" title="퇴로 — 드래그로 그리기 (4)">⇢ 퇴로</button>
+        <button data-tool="mark" title="방어 위치 박스 (5)">▢ 방어</button>
+        <button data-tool="text" title="메모 (6)">✎ 메모</button>
+        <button data-tool="erase" title="지우기 (E)">⌫ 지우기</button>
+      </div>
+      <div class="group" id="sides">
+        <span class="lbl">색</span>
+        <button data-side="b1" class="side on">1시</button>
+        <button data-side="b10" class="side">10시</button>
+        <button data-side="b6" class="side">6시</button>
+        <button data-side="neutral" class="side">흰색</button>
+      </div>
+      <div class="group">
+        <button id="btn-edit-map" title="지형 편집 모드">⛰ 지형 편집</button>
+        <button id="btn-panel" class="mobile-only">☰</button>
+      </div>
+    </header>
+
+    <aside id="left" class="panel">
+      <h3>단계 <small>(설명 순서)</small></h3>
+      <ol id="steps"></ol>
+      <div class="row">
+        <button id="step-add" title="현재 단계를 복사해서 다음 단계 만들기">+ 다음 단계</button>
+        <button id="step-del">삭제</button>
+        <button id="step-play">▶ 재생</button>
+      </div>
+      <label class="field">제목<input id="step-title" /></label>
+      <label class="field">설명<textarea id="step-note" rows="5"></textarea></label>
+      <h3>시나리오</h3>
+      <div class="row wrap">
+        <select id="preset"></select>
+        <button id="preset-load">불러오기</button>
+      </div>
+      <div class="row wrap">
+        <button id="scn-new">새로 만들기</button>
+        <button id="scn-share">🔗 링크 복사</button>
+        <button id="scn-export">내보내기</button>
+        <label class="filebtn">가져오기<input type="file" id="scn-import" accept=".json" /></label>
+      </div>
+    </aside>
+
+    <aside id="right" class="panel">
+      <section id="sel-panel" hidden>
+        <h3>선택됨</h3>
+        <div id="sel-body"></div>
+      </section>
+
+      <section id="map-panel" hidden>
+        <h3>지형 편집</h3>
+        <p class="hint">핸들(구슬)을 드래그해 위치를 옮기고, 클릭하면 아래에서 높이·크기를 바꿀 수 있어요.</p>
+        <div id="feat-body" class="hint">선택된 지형 없음</div>
+        <div class="row wrap">
+          <button id="feat-add-hill">+ 언덕</button>
+          <button id="feat-add-rock">+ 바위</button>
+          <button id="feat-add-ramp">+ 경사로</button>
+        </div>
+        <h4>참고 지도 겹치기</h4>
+        <p class="hint">게임 지도 스크린샷(정사각형으로 자른 것)을 올리면 지형 위에 겹쳐 보여요. 저장은 이 브라우저에만 돼요.</p>
+        <label class="filebtn">이미지 선택<input type="file" id="ov-file" accept="image/*" /></label>
+        <button id="ov-clear">제거</button>
+        <label class="field">투명도<input type="range" id="ov-opacity" min="0" max="1" step="0.05" /></label>
+        <label class="field">크기<input type="range" id="ov-scale" min="0.5" max="1.5" step="0.005" /></label>
+        <label class="field">회전<input type="range" id="ov-rot" min="-30" max="30" step="0.5" /></label>
+        <label class="field">좌우<input type="range" id="ov-dx" min="-0.3" max="0.3" step="0.002" /></label>
+        <label class="field">상하<input type="range" id="ov-dy" min="-0.3" max="0.3" step="0.002" /></label>
+        <div class="row wrap">
+          <button id="map-export">지형 JSON 내보내기</button>
+          <label class="filebtn">가져오기<input type="file" id="map-import" accept=".json" /></label>
+          <button id="map-reset">기본값으로</button>
+        </div>
+      </section>
+
+      <section>
+        <h3>카메라</h3>
+        <div class="row wrap">
+          <button data-cam="top">탑뷰</button>
+          <button data-cam="quarter">쿼터뷰</button>
+          <button data-cam="b1">1시 본진</button>
+          <button data-cam="b10">10시 본진</button>
+          <button data-cam="b6">6시 본진</button>
+        </div>
+        <label class="field">시야각(FOV) <b id="fov-val"></b><input type="range" id="fov" min="25" max="100" step="1" /></label>
+        <label class="field">높이 과장 <b id="hs-val"></b><input type="range" id="hscale" min="0.5" max="3" step="0.1" /></label>
+        <label class="check"><input type="checkbox" id="show-labels" checked /> 노드 이름</label>
+        <label class="check"><input type="checkbox" id="show-xray" checked /> 언덕 뒤 경로 비침</label>
+      </section>
+
+      <section>
+        <h3>본진 ↔ 총사령부</h3>
+        <p class="hint">매 판 시작 위치가 바뀌니 여기서 맞춰주세요.</p>
+        <div id="gc-assign"></div>
+      </section>
+
+      <section class="help">
+        <h3>조작법</h3>
+        <ul>
+          <li>회전: 왼쪽 드래그 (그리기 도구 중엔 오른쪽 드래그)</li>
+          <li>이동: 오른쪽 드래그 / Shift+드래그</li>
+          <li>확대: 휠 · 두 손가락</li>
+          <li>노드 클릭: 등급 B → A → S → 없음</li>
+          <li>Delete: 선택 삭제 · Ctrl+Z: 되돌리기</li>
+        </ul>
+      </section>
+    </aside>
+
+    <div id="step-caption"></div>
+    <div id="toast"></div>
+  </div>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
